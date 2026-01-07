@@ -1,9 +1,16 @@
 import streamlit as st
 import pandas as pd
 import os
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import classification_report
+
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score,
+    f1_score, confusion_matrix, classification_report
+)
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -29,7 +36,7 @@ body {
 
 # ---------------- TITLE ----------------
 st.markdown(
-    "<div class='card'><h2>📊 Telco Customer Churn Prediction</h2>"
+    "<div class='card'><h2>Telco Customer Churn Prediction</h2>"
     "<p>Logistic Regression Model</p></div>",
     unsafe_allow_html=True
 )
@@ -40,17 +47,14 @@ def load_data():
     path = os.path.join(os.path.dirname(__file__),
                         "WA_Fn-UseC_-Telco-Customer-Churn.csv")
     df = pd.read_csv(path)
-
-    # Fix TotalCharges
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
     df['TotalCharges'].fillna(df['TotalCharges'].median(), inplace=True)
-
     return df
 
 df = load_data()
 
 # ---------------- DATA PREVIEW ----------------
-with st.expander("📄 Dataset Preview"):
+with st.expander(" Dataset Preview"):
     st.dataframe(df.head())
 
 # ---------------- FEATURES & TARGET ----------------
@@ -73,16 +77,17 @@ model = LogisticRegression(
 )
 model.fit(X_train, y_train)
 
-# ---------------- EVALUATION ----------------
+# ---------------- PREDICTIONS ----------------
 y_pred = model.predict(X_test)
 
+# ---------------- METRICS ----------------
 accuracy  = accuracy_score(y_test, y_pred)
 precision = precision_score(y_test, y_pred, pos_label="Yes")
 recall    = recall_score(y_test, y_pred, pos_label="Yes")
 f1        = f1_score(y_test, y_pred, pos_label="Yes")
 
 # ---------------- METRICS DISPLAY ----------------
-st.markdown("<div class='card'><h3>📈 Model Performance</h3>", unsafe_allow_html=True)
+st.markdown("<div class='card'><h3> Model Performance</h3>", unsafe_allow_html=True)
 
 st.metric("Accuracy", f"{accuracy:.3f}")
 st.metric("Precision", f"{precision:.3f}")
@@ -91,21 +96,46 @@ st.metric("F1 Score", f"{f1:.3f}")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------- CONFUSION MATRIX ----------------
+# ---------------- CONFUSION MATRIX HEATMAP ----------------
+st.markdown("<div class='card'><h3> Confusion Matrix Heatmap</h3></div>",
+            unsafe_allow_html=True)
+
 cm = confusion_matrix(y_test, y_pred, labels=["Yes", "No"])
-cm_df = pd.DataFrame(
+
+fig, ax = plt.subplots(figsize=(5, 4))
+sns.heatmap(
     cm,
-    index=["Actual Churn", "Actual No Churn"],
-    columns=["Predicted Churn", "Predicted No Churn"]
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    xticklabels=["Predicted Yes", "Predicted No"],
+    yticklabels=["Actual Yes", "Actual No"],
+    ax=ax
+)
+ax.set_xlabel("Prediction")
+ax.set_ylabel("Actual")
+
+st.pyplot(fig)
+
+# ---------------- CLASSIFICATION REPORT ----------------
+
+report_dict = classification_report(
+    y_test,
+    y_pred,
+    output_dict=True
 )
 
-st.markdown("<div class='card'><h3>📊 Confusion Matrix</h3>", unsafe_allow_html=True)
-st.dataframe(cm_df)
-st.markdown("</div>", unsafe_allow_html=True)
+report_df = pd.DataFrame(report_dict).transpose()
 
+st.markdown("<div class='card'><h3>Classification Report</h3></div>",
+            unsafe_allow_html=True)
+
+st.dataframe(
+    report_df.style.format("{:.3f}")
+)
 # ================= CUSTOMER INPUT PREDICTION =================
 st.markdown(
-    "<div class='card'><h3>🧑 Predict Churn for a Customer</h3>"
+    "<div class='card'><h3>Predict Churn for a Customer</h3>"
     "<p>Modify values to see churn risk</p></div>",
     unsafe_allow_html=True
 )
@@ -113,34 +143,28 @@ st.markdown(
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    tenure = st.slider(
-        "Tenure (Months)",
-        min_value=0,
-        max_value=72,
-        value=12
-    )
+    tenure = st.slider("Tenure (Months)", 0, 72, 12)
 
 with col2:
     monthly_charges = st.slider(
         "Monthly Charges",
-        min_value=0.0,
-        max_value=float(df["MonthlyCharges"].max()),
-        value=50.0,
+        0.0,
+        float(df["MonthlyCharges"].max()),
+        50.0,
         step=1.0
     )
 
 with col3:
     total_charges = st.slider(
         "Total Charges",
-        min_value=0.0,
-        max_value=float(df["TotalCharges"].max()),
-        value=500.0,
+        0.0,
+        float(df["TotalCharges"].max()),
+        500.0,
         step=10.0
     )
 
 # ---------------- PREPARE INPUT ----------------
 input_data = pd.DataFrame(0, index=[0], columns=X.columns)
-
 input_data.at[0, "tenure"] = tenure
 input_data.at[0, "MonthlyCharges"] = monthly_charges
 input_data.at[0, "TotalCharges"] = total_charges
